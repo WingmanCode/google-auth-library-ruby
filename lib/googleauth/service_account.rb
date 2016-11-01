@@ -56,8 +56,8 @@ module Google
       def self.make_creds(options = {})
         json, json_key_io, scope = options.values_at(:json, :json_key_io, :scope)
         if json
-          private_key = json[:private_key]
-          client_email = json[:client_email]
+          private_key = (json[:private_key] ? json[:private_key] : json["private_key"])
+          client_email = (json[:client_email] ? json[:client_email] : json["client_email"])
         elsif json_key_io
           private_key, client_email = read_json_key(json_key_io)
         else
