@@ -6,7 +6,7 @@ require "googleauth/version"
 
 Gem::Specification.new do |gem|
   gem.name          = "googleauth"
-  gem.version       = "0.9"
+  gem.version       = "0.17"
   gem.authors       = ["Tim Emiola"]
   gem.email         = "temiola@google.com"
   gem.homepage      = "https://github.com/googleapis/google-auth-library-ruby"
