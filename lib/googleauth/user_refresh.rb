@@ -27,10 +27,10 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-require 'googleauth/signet'
-require 'googleauth/credentials_loader'
-require 'googleauth/scope_util'
-require 'multi_json'
+require "googleauth/signet"
+require "googleauth/credentials_loader"
+require "googleauth/scope_util"
+require "multi_json"
 
 module Google
   # Module Auth provides classes that provide Google-specific authorization
@@ -44,63 +44,72 @@ module Google
     # 'gcloud auth login' saves a file with these contents in well known
     # location
     #
-    # cf [Application Default Credentials](http://goo.gl/mkAHpZ)
+    # cf [Application Default Credentials](https://cloud.google.com/docs/authentication/production)
     class UserRefreshCredentials < Signet::OAuth2::Client
-      TOKEN_CRED_URI = 'https://www.googleapis.com/oauth2/v3/token'.freeze
-      AUTHORIZATION_URI = 'https://accounts.google.com/o/oauth2/auth'.freeze
-      REVOKE_TOKEN_URI = 'https://accounts.google.com/o/oauth2/revoke'.freeze
+      TOKEN_CRED_URI = "https://oauth2.googleapis.com/token".freeze
+      AUTHORIZATION_URI = "https://accounts.google.com/o/oauth2/auth".freeze
+      REVOKE_TOKEN_URI = "https://oauth2.googleapis.com/revoke".freeze
       extend CredentialsLoader
+      attr_reader :project_id
 
       # Create a UserRefreshCredentials.
       #
       # @param json_key_io [IO] an IO from which the JSON key can be read
       # @param scope [string|array|nil] the scope(s) to access
-      def self.make_creds(options = {})
-        json_key_io, scope = options.values_at(:json_key_io, :scope)
-        user_creds = read_json_key(json_key_io) if json_key_io
+      def self.make_creds options = {}
+        json_key_io, scope = options.values_at :json_key_io, :scope
+        user_creds = read_json_key json_key_io if json_key_io
         user_creds ||= {
-          'client_id'     => ENV[CredentialsLoader::CLIENT_ID_VAR],
-          'client_secret' => ENV[CredentialsLoader::CLIENT_SECRET_VAR],
-          'refresh_token' => ENV[CredentialsLoader::REFRESH_TOKEN_VAR]
+          "client_id"     => ENV[CredentialsLoader::CLIENT_ID_VAR],
+          "client_secret" => ENV[CredentialsLoader::CLIENT_SECRET_VAR],
+          "refresh_token" => ENV[CredentialsLoader::REFRESH_TOKEN_VAR],
+          "project_id"    => ENV[CredentialsLoader::PROJECT_ID_VAR]
         }
 
         new(token_credential_uri: TOKEN_CRED_URI,
-            client_id: user_creds['client_id'],
-            client_secret: user_creds['client_secret'],
-            refresh_token: user_creds['refresh_token'],
-            scope: scope)
+            client_id:            user_creds["client_id"],
+            client_secret:        user_creds["client_secret"],
+            refresh_token:        user_creds["refresh_token"],
+            project_id:           user_creds["project_id"],
+            scope:                scope)
+          .configure_connection(options)
       end
 
       # Reads the client_id, client_secret and refresh_token fields from the
       # JSON key.
-      def self.read_json_key(json_key_io)
-        json_key = MultiJson.load(json_key_io.read)
-        wanted = %w(client_id client_secret refresh_token)
+      def self.read_json_key json_key_io
+        json_key = MultiJson.load json_key_io.read
+        wanted = ["client_id", "client_secret", "refresh_token"]
         wanted.each do |key|
-          raise "the json is missing the #{key} field" unless json_key.key?(key)
+          raise "the json is missing the #{key} field" unless json_key.key? key
         end
         json_key
       end
 
-      def initialize(options = {})
+      def initialize options = {}
         options ||= {}
         options[:token_credential_uri] ||= TOKEN_CRED_URI
         options[:authorization_uri] ||= AUTHORIZATION_URI
-        super(options)
+        @project_id = options[:project_id]
+        @project_id ||= CredentialsLoader.load_gcloud_project_id
+        super options
       end
 
       # Revokes the credential
-      def revoke!(options = {})
+      def revoke! options = {}
         c = options[:connection] || Faraday.default_connection
-        resp = c.get(REVOKE_TOKEN_URI, token: refresh_token || access_token)
-        case resp.status
-        when 200
-          self.access_token = nil
-          self.refresh_token = nil
-          self.expires_at = 0
-        else
-          raise(Signet::AuthorizationError,
-                "Unexpected error code #{resp.status}")
+
+        retry_with_error do
+          resp = c.post(REVOKE_TOKEN_URI, token: refresh_token || access_token)
+          case resp.status
+          when 200
+            self.access_token = nil
+            self.refresh_token = nil
+            self.expires_at = 0
+          else
+            raise(Signet::AuthorizationError,
+                  "Unexpected error code #{resp.status}")
+          end
         end
       end
 
@@ -110,7 +119,7 @@ module Google
       #  Scope to verify
       # @return [Boolean]
       #  True if scope is granted
-      def includes_scope?(required_scope)
+      def includes_scope? required_scope
         missing_scope = Google::Auth::ScopeUtil.normalize(required_scope) -
                         Google::Auth::ScopeUtil.normalize(scope)
         missing_scope.empty?

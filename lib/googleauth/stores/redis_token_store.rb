@@ -27,8 +27,8 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-require 'redis'
-require 'googleauth/token_store'
+require "redis"
+require "googleauth/token_store"
 
 module Google
   module Auth
@@ -37,7 +37,7 @@ module Google
       # are stored as JSON using the supplied key, prefixed with
       # `g-user-token:`
       class RedisTokenStore < Google::Auth::TokenStore
-        DEFAULT_KEY_PREFIX = 'g-user-token:'.freeze
+        DEFAULT_KEY_PREFIX = "g-user-token:".freeze
 
         # Create a new store with the supplied redis client.
         #
@@ -48,34 +48,35 @@ module Google
         # @note If no redis instance is provided, a new one is created and
         #  the options passed through. You may include any other keys accepted
         #  by `Redis.new`
-        def initialize(options = {})
-          redis = options.delete(:redis)
-          prefix = options.delete(:prefix)
+        def initialize options = {}
+          super()
+          redis = options.delete :redis
+          prefix = options.delete :prefix
           @redis = case redis
                    when Redis
                      redis
                    else
-                     Redis.new(options)
+                     Redis.new options
                    end
           @prefix = prefix || DEFAULT_KEY_PREFIX
         end
 
         # (see Google::Auth::Stores::TokenStore#load)
-        def load(id)
-          key = key_for(id)
-          @redis.get(key)
+        def load id
+          key = key_for id
+          @redis.get key
         end
 
         # (see Google::Auth::Stores::TokenStore#store)
-        def store(id, token)
-          key = key_for(id)
-          @redis.set(key, token)
+        def store id, token
+          key = key_for id
+          @redis.set key, token
         end
 
         # (see Google::Auth::Stores::TokenStore#delete)
-        def delete(id)
-          key = key_for(id)
-          @redis.del(key)
+        def delete id
+          key = key_for id
+          @redis.del key
         end
 
         private
@@ -86,7 +87,7 @@ module Google
         #  ID of the token
         # @return [String]
         #  Redis key
-        def key_for(id)
+        def key_for id
           @prefix + id
         end
       end

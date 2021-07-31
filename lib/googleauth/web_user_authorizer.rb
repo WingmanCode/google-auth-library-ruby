@@ -27,11 +27,11 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-require 'multi_json'
-require 'googleauth/signet'
-require 'googleauth/user_authorizer'
-require 'googleauth/user_refresh'
-require 'securerandom'
+require "multi_json"
+require "googleauth/signet"
+require "googleauth/user_authorizer"
+require "googleauth/user_refresh"
+require "securerandom"
 
 module Google
   module Auth
@@ -58,29 +58,26 @@ module Google
     #    end
     #
     # Instead of implementing the callback directly, applications are
-    # encouraged to use {Google::Auth::Web::AuthCallbackApp} instead.
+    # encouraged to use {Google::Auth::WebUserAuthorizer::CallbackApp} instead.
     #
-    # For rails apps, see {Google::Auth::ControllerHelpers}
-    #
-    # @see {Google::Auth::AuthCallbackApp}
-    # @see {Google::Auth::ControllerHelpers}
+    # @see CallbackApp
     # @note Requires sessions are enabled
     class WebUserAuthorizer < Google::Auth::UserAuthorizer
-      STATE_PARAM = 'state'.freeze
-      AUTH_CODE_KEY = 'code'.freeze
-      ERROR_CODE_KEY = 'error'.freeze
-      SESSION_ID_KEY = 'session_id'.freeze
-      CALLBACK_STATE_KEY = 'g-auth-callback'.freeze
-      CURRENT_URI_KEY = 'current_uri'.freeze
-      XSRF_KEY = 'g-xsrf-token'.freeze
-      SCOPE_KEY = 'scope'.freeze
+      STATE_PARAM = "state".freeze
+      AUTH_CODE_KEY = "code".freeze
+      ERROR_CODE_KEY = "error".freeze
+      SESSION_ID_KEY = "session_id".freeze
+      CALLBACK_STATE_KEY = "g-auth-callback".freeze
+      CURRENT_URI_KEY = "current_uri".freeze
+      XSRF_KEY = "g-xsrf-token".freeze
+      SCOPE_KEY = "scope".freeze
 
-      NIL_REQUEST_ERROR = 'Request is required.'.freeze
-      NIL_SESSION_ERROR = 'Sessions must be enabled'.freeze
-      MISSING_AUTH_CODE_ERROR = 'Missing authorization code in request'.freeze
-      AUTHORIZATION_ERROR = 'Authorization error: %s'.freeze
+      NIL_REQUEST_ERROR = "Request is required.".freeze
+      NIL_SESSION_ERROR = "Sessions must be enabled".freeze
+      MISSING_AUTH_CODE_ERROR = "Missing authorization code in request".freeze
+      AUTHORIZATION_ERROR = "Authorization error: %s".freeze
       INVALID_STATE_TOKEN_ERROR =
-        'State token does not match expected value'.freeze
+        "State token does not match expected value".freeze
 
       class << self
         attr_accessor :default
@@ -97,9 +94,9 @@ module Google
       #
       # @param [Rack::Request] request
       #  Current request
-      def self.handle_auth_callback_deferred(request)
-        callback_state, redirect_uri = extract_callback_state(request)
-        request.session[CALLBACK_STATE_KEY] = MultiJson.dump(callback_state)
+      def self.handle_auth_callback_deferred request
+        callback_state, redirect_uri = extract_callback_state request
+        request.session[CALLBACK_STATE_KEY] = MultiJson.dump callback_state
         redirect_uri
       end
 
@@ -114,8 +111,8 @@ module Google
       # @param [String] callback_uri
       #  URL (either absolute or relative) of the auth callback. Defaults
       #  to '/oauth2callback'
-      def initialize(client_id, scope, token_store, callback_uri = nil)
-        super(client_id, scope, token_store, callback_uri)
+      def initialize client_id, scope, token_store, callback_uri = nil
+        super client_id, scope, token_store, callback_uri
       end
 
       # Handle the result of the oauth callback. Exchanges the authorization
@@ -127,15 +124,15 @@ module Google
       #  Current request
       # @return (Google::Auth::UserRefreshCredentials, String)
       #  credentials & next URL to redirect to
-      def handle_auth_callback(user_id, request)
+      def handle_auth_callback user_id, request
         callback_state, redirect_uri = WebUserAuthorizer.extract_callback_state(
           request
         )
-        WebUserAuthorizer.validate_callback_state(callback_state, request)
+        WebUserAuthorizer.validate_callback_state callback_state, request
         credentials = get_and_store_credentials_from_code(
-          user_id: user_id,
-          code: callback_state[AUTH_CODE_KEY],
-          scope: callback_state[SCOPE_KEY],
+          user_id:  user_id,
+          code:     callback_state[AUTH_CODE_KEY],
+          scope:    callback_state[SCOPE_KEY],
           base_url: request.url
         )
         [credentials, redirect_uri]
@@ -154,30 +151,35 @@ module Google
       # @param [String, Array<String>] scope
       #  Authorization scope to request. Overrides the instance scopes if
       #  not nil.
+      # @param [Hash] state
+      #  Optional key-values to be returned to the oauth callback.
       # @return [String]
       #  Authorization url
-      def get_authorization_url(options = {})
+      def get_authorization_url options = {}
         options = options.dup
         request = options[:request]
         raise NIL_REQUEST_ERROR if request.nil?
         raise NIL_SESSION_ERROR if request.session.nil?
 
+        state = options[:state] || {}
+
         redirect_to = options[:redirect_to] || request.url
         request.session[XSRF_KEY] = SecureRandom.base64
-        options[:state] = MultiJson.dump(
-          SESSION_ID_KEY => request.session[XSRF_KEY],
-          CURRENT_URI_KEY => redirect_to
-        )
+        options[:state] = MultiJson.dump(state.merge(
+                                           SESSION_ID_KEY  => request.session[XSRF_KEY],
+                                           CURRENT_URI_KEY => redirect_to
+                                         ))
         options[:base_url] = request.url
-        super(options)
+        super options
       end
 
-      # Fetch stored credentials for the user.
+      # Fetch stored credentials for the user from the given request session.
       #
       # @param [String] user_id
       #  Unique ID of the user for loading/storing credentials.
       # @param [Rack::Request] request
-      #  Current request
+      #  Current request. Optional. If omitted, this will attempt to fall back
+      #  on the base class behavior of reading from the token store.
       # @param [Array<String>, String] scope
       #  If specified, only returns credentials that have all the \
       #  requested scopes
@@ -186,32 +188,32 @@ module Google
       # @raise [Signet::AuthorizationError]
       #  May raise an error if an authorization code is present in the session
       #  and exchange of the code fails
-      def get_credentials(user_id, request, scope = nil)
-        if request.session.key?(CALLBACK_STATE_KEY)
+      def get_credentials user_id, request = nil, scope = nil
+        if request&.session&.key? CALLBACK_STATE_KEY
           # Note - in theory, no need to check required scope as this is
           # expected to be called immediately after a return from authorization
-          state_json = request.session.delete(CALLBACK_STATE_KEY)
-          callback_state = MultiJson.load(state_json)
-          WebUserAuthorizer.validate_callback_state(callback_state, request)
+          state_json = request.session.delete CALLBACK_STATE_KEY
+          callback_state = MultiJson.load state_json
+          WebUserAuthorizer.validate_callback_state callback_state, request
           get_and_store_credentials_from_code(
-            user_id: user_id,
-            code: callback_state[AUTH_CODE_KEY],
-            scope: callback_state[SCOPE_KEY],
+            user_id:  user_id,
+            code:     callback_state[AUTH_CODE_KEY],
+            scope:    callback_state[SCOPE_KEY],
             base_url: request.url
           )
         else
-          super(user_id, scope)
+          super user_id, scope
         end
       end
 
-      def self.extract_callback_state(request)
-        state = MultiJson.load(request[STATE_PARAM] || '{}')
+      def self.extract_callback_state request
+        state = MultiJson.load(request[STATE_PARAM] || "{}")
         redirect_uri = state[CURRENT_URI_KEY]
         callback_state = {
-          AUTH_CODE_KEY => request[AUTH_CODE_KEY],
+          AUTH_CODE_KEY  => request[AUTH_CODE_KEY],
           ERROR_CODE_KEY => request[ERROR_CODE_KEY],
           SESSION_ID_KEY => state[SESSION_ID_KEY],
-          SCOPE_KEY => request[SCOPE_KEY]
+          SCOPE_KEY      => request[SCOPE_KEY]
         }
         [callback_state, redirect_uri]
       end
@@ -226,12 +228,11 @@ module Google
       #  Error message if failed
       # @param [Rack::Request] request
       #  Current request
-      def self.validate_callback_state(state, request)
-        if state[AUTH_CODE_KEY].nil?
-          raise Signet::AuthorizationError, MISSING_AUTH_CODE_ERROR
-        elsif state[ERROR_CODE_KEY]
+      def self.validate_callback_state state, request
+        raise Signet::AuthorizationError, MISSING_AUTH_CODE_ERROR if state[AUTH_CODE_KEY].nil?
+        if state[ERROR_CODE_KEY]
           raise Signet::AuthorizationError,
-                sprintf(AUTHORIZATION_ERROR, state[ERROR_CODE_KEY])
+                format(AUTHORIZATION_ERROR, state[ERROR_CODE_KEY])
         elsif request.session[XSRF_KEY] != state[SESSION_ID_KEY]
           raise Signet::AuthorizationError, INVALID_STATE_TOKEN_ERROR
         end
@@ -257,9 +258,9 @@ module Google
       #       Google::Auth::WebUserAuthorizer::CallbackApp.call(env)
       #     end
       #
-      # @see {Google::Auth::WebUserAuthorizer}
+      # @see Google::Auth::WebUserAuthorizer
       class CallbackApp
-        LOCATION_HEADER = 'Location'.freeze
+        LOCATION_HEADER = "Location".freeze
         REDIR_STATUS = 302
         ERROR_STATUS = 500
 
@@ -275,18 +276,18 @@ module Google
         #  Rack environment
         # @return [Array]
         #  HTTP response
-        def self.call(env)
-          request = Rack::Request.new(env)
-          return_url = WebUserAuthorizer.handle_auth_callback_deferred(request)
+        def self.call env
+          request = Rack::Request.new env
+          return_url = WebUserAuthorizer.handle_auth_callback_deferred request
           if return_url
             [REDIR_STATUS, { LOCATION_HEADER => return_url }, []]
           else
-            [ERROR_STATUS, {}, ['No return URL is present in the request.']]
+            [ERROR_STATUS, {}, ["No return URL is present in the request."]]
           end
         end
 
-        def call(env)
-          self.class.call(env)
+        def call env
+          self.class.call env
         end
       end
     end

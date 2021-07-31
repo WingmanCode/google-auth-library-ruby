@@ -1,16 +1,13 @@
 # Google Auth Library for Ruby
 
 <dl>
-  <dt>Homepage</dt><dd><a href="http://www.github.com/google/google-auth-library-ruby">http://www.github.com/google/google-auth-library-ruby</a></dd>
+  <dt>Homepage</dt><dd><a href="http://www.github.com/googleapis/google-auth-library-ruby">http://www.github.com/googleapis/google-auth-library-ruby</a></dd>
   <dt>Authors</dt><dd><a href="mailto:temiola@google.com">Tim Emiola</a></dd>
   <dt>Copyright</dt><dd>Copyright © 2015 Google, Inc.</dd>
   <dt>License</dt><dd>Apache 2.0</dd>
 </dl>
 
 [![Gem Version](https://badge.fury.io/rb/googleauth.svg)](http://badge.fury.io/rb/googleauth)
-[![Build Status](https://secure.travis-ci.org/google/google-auth-library-ruby.png)](http://travis-ci.org/google/google-auth-library-ruby)
-[![Coverage Status](https://coveralls.io/repos/google/google-auth-library-ruby/badge.png)](https://coveralls.io/r/google/google-auth-library-ruby)
-[![Dependency Status](https://gemnasium.com/google/google-auth-library-ruby.png)](https://gemnasium.com/google/google-auth-library-ruby)
 
 ## Description
 
@@ -131,6 +128,47 @@ end
 # OK to use credentials
 ```
 
+### Example (Service Account)
+
+```ruby
+scope = 'https://www.googleapis.com/auth/androidpublisher'
+
+authorizer = Google::Auth::ServiceAccountCredentials.make_creds(
+  json_key_io: File.open('/path/to/service_account_json_key.json'),
+  scope: scope)
+
+authorizer.fetch_access_token!
+```
+
+### Example (Environment Variables)
+
+```bash
+export GOOGLE_ACCOUNT_TYPE=service_account
+export GOOGLE_CLIENT_ID=000000000000000000000
+export GOOGLE_CLIENT_EMAIL=xxxx@xxxx.iam.gserviceaccount.com
+export GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+```ruby
+require 'googleauth'
+require 'google/apis/drive_v3'
+
+Drive = ::Google::Apis::DriveV3
+drive = Drive::DriveService.new
+
+# Auths with ENV vars:
+# "GOOGLE_CLIENT_ID",
+# "GOOGLE_CLIENT_EMAIL",
+# "GOOGLE_ACCOUNT_TYPE", 
+# "GOOGLE_PRIVATE_KEY"
+auth = ::Google::Auth::ServiceAccountCredentials
+  .make_creds(scope: 'https://www.googleapis.com/auth/drive')
+drive.authorization = auth
+
+list_files = drive.list_files()
+
+```
+
 ### Storage
 
 Authorizers require a storage instance to manage long term persistence of
@@ -140,20 +178,23 @@ access and refresh tokens. Two storage implementations are included:
 *   Google::Auth::Stores::RedisTokenStore
 
 Custom storage implementations can also be used. See
-[token_store.rb](lib/googleauth/token_store.rb) for additional details.
+[token_store.rb](https://googleapis.dev/ruby/googleauth/latest/Google/Auth/TokenStore.html) for additional details.
 
-## What about auth in google-apis-ruby-client?
+## Supported Ruby Versions
 
-The goal is for all auth done by
-[google-apis-ruby-client][google-apis-ruby-client] to be performed by this
-library. I.e, eventually google-apis-ruby-client will just take a dependency
-on this library.  This update is a work in progress, but should be completed
-by Q2 2015.
+This library is supported on Ruby 2.5+.
+
+Google provides official support for Ruby versions that are actively supported
+by Ruby Core—that is, Ruby versions that are either in normal maintenance or in
+security maintenance, and not end of life. Currently, this means Ruby 2.5 and
+later. Older versions of Ruby _may_ still work, but are unsupported and not
+recommended. See https://www.ruby-lang.org/en/downloads/branches/ for details
+about the Ruby support schedule.
 
 ## License
 
 This library is licensed under Apache 2.0. Full license text is
-available in [COPYING][copying].
+available in [LICENSE][license].
 
 ## Contributing
 
@@ -167,7 +208,6 @@ hesitate to
 [ask questions](http://stackoverflow.com/questions/tagged/google-auth-library-ruby)
 about the client or APIs on [StackOverflow](http://stackoverflow.com).
 
-[google-apis-ruby-client]: (https://github.com/google/google-api-ruby-client)
-[application default credentials]: (https://developers.google.com/accounts/docs/application-default-credentials)
-[contributing]: https://github.com/google/google-auth-library-ruby/tree/master/CONTRIBUTING.md
-[copying]: https://github.com/google/google-auth-library-ruby/tree/master/COPYING
+[application default credentials]: https://developers.google.com/accounts/docs/application-default-credentials
+[contributing]: https://github.com/googleapis/google-auth-library-ruby/tree/master/.github/CONTRIBUTING.md
+[license]: https://github.com/googleapis/google-auth-library-ruby/tree/master/LICENSE

@@ -27,7 +27,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-require 'signet/oauth_2/client'
+require "signet/oauth_2/client"
 
 module Signet
   # OAuth2 supports OAuth2 authentication.
@@ -38,43 +38,85 @@ module Signet
     # This reopens Client to add #apply and #apply! methods which update a
     # hash with the fetched authentication token.
     class Client
+      def configure_connection options
+        @connection_info =
+          options[:connection_builder] || options[:default_connection]
+        self
+      end
+
       # Updates a_hash updated with the authentication token
-      def apply!(a_hash, opts = {})
+      def apply! a_hash, opts = {}
         # fetch the access token there is currently not one, or if the client
         # has expired
-        fetch_access_token!(opts) if access_token.nil? || expires_within?(60)
-        a_hash[AUTH_METADATA_KEY] = "Bearer #{access_token}"
+        token_type = target_audience ? :id_token : :access_token
+        fetch_access_token! opts if send(token_type).nil? || expires_within?(60)
+        a_hash[AUTH_METADATA_KEY] = "Bearer #{send token_type}"
       end
 
       # Returns a clone of a_hash updated with the authentication token
-      def apply(a_hash, opts = {})
+      def apply a_hash, opts = {}
         a_copy = a_hash.clone
-        apply!(a_copy, opts)
+        apply! a_copy, opts
         a_copy
       end
 
       # Returns a reference to the #apply method, suitable for passing as
       # a closure
       def updater_proc
-        lambda(&method(:apply))
+        proc { |a_hash, opts = {}| apply a_hash, opts }
       end
 
-      def on_refresh(&block)
-        @refresh_listeners ||= []
+      def on_refresh &block
+        @refresh_listeners = [] unless defined? @refresh_listeners
         @refresh_listeners << block
       end
 
       alias orig_fetch_access_token! fetch_access_token!
-      def fetch_access_token!(options = {})
-        info = orig_fetch_access_token!(options)
+      def fetch_access_token! options = {}
+        unless options[:connection]
+          connection = build_default_connection
+          options = options.merge connection: connection if connection
+        end
+        info = retry_with_error do
+          orig_fetch_access_token! options
+        end
         notify_refresh_listeners
         info
       end
 
       def notify_refresh_listeners
-        listeners = @refresh_listeners || []
+        listeners = defined?(@refresh_listeners) ? @refresh_listeners : []
         listeners.each do |block|
-          block.call(self)
+          block.call self
+        end
+      end
+
+      def build_default_connection
+        if !defined?(@connection_info)
+          nil
+        elsif @connection_info.respond_to? :call
+          @connection_info.call
+        else
+          @connection_info
+        end
+      end
+
+      def retry_with_error max_retry_count = 5
+        retry_count = 0
+
+        begin
+          yield
+        rescue StandardError => e
+          raise e if e.is_a?(Signet::AuthorizationError) || e.is_a?(Signet::ParseError)
+
+          if retry_count < max_retry_count
+            retry_count += 1
+            sleep retry_count * 0.3
+            retry
+          else
+            msg = "Unexpected error: #{e.inspect}"
+            raise Signet::AuthorizationError, msg
+          end
         end
       end
     end
