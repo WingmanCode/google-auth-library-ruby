@@ -27,9 +27,9 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-require 'googleauth/signet'
-require 'googleauth/credentials_loader'
-require 'multi_json'
+require "googleauth/signet"
+require "googleauth/credentials_loader"
+require "multi_json"
 
 module Google
   # Module Auth provides classes that provide Google-specific authorization
@@ -37,14 +37,14 @@ module Google
   module Auth
     # Authenticates requests using IAM credentials.
     class IAMCredentials
-      SELECTOR_KEY = 'x-goog-iam-authority-selector'.freeze
-      TOKEN_KEY = 'x-goog-iam-authorization-token'.freeze
+      SELECTOR_KEY = "x-goog-iam-authority-selector".freeze
+      TOKEN_KEY = "x-goog-iam-authorization-token".freeze
 
       # Initializes an IAMCredentials.
       #
       # @param selector the IAM selector.
       # @param token the IAM token.
-      def initialize(selector, token)
+      def initialize selector, token
         raise TypeError unless selector.is_a? String
         raise TypeError unless token.is_a? String
         @selector = selector
@@ -52,23 +52,23 @@ module Google
       end
 
       # Adds the credential fields to the hash.
-      def apply!(a_hash)
+      def apply! a_hash
         a_hash[SELECTOR_KEY] = @selector
         a_hash[TOKEN_KEY] = @token
         a_hash
       end
 
       # Returns a clone of a_hash updated with the authoriation header
-      def apply(a_hash)
+      def apply a_hash
         a_copy = a_hash.clone
-        apply!(a_copy)
+        apply! a_copy
         a_copy
       end
 
       # Returns a reference to the #apply method, suitable for passing as
       # a closure
       def updater_proc
-        lambda(&method(:apply))
+        proc { |a_hash, _opts = {}| apply a_hash }
       end
     end
   end

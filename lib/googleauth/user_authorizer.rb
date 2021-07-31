@@ -27,12 +27,11 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-require 'uri'
-require 'multi_json'
-require 'googleauth/signet'
-require 'googleauth/user_refresh'
+require "uri"
+require "multi_json"
+require "googleauth/signet"
+require "googleauth/user_refresh"
 
-# rubocop:disable ClassLength
 module Google
   module Auth
     # Handles an interactive 3-Legged-OAuth2 (3LO) user consent authorization.
@@ -54,11 +53,11 @@ module Google
     #     ...
     class UserAuthorizer
       MISMATCHED_CLIENT_ID_ERROR =
-        'Token client ID of %s does not match configured client id %s'.freeze
-      NIL_CLIENT_ID_ERROR = 'Client id can not be nil.'.freeze
-      NIL_SCOPE_ERROR = 'Scope can not be nil.'.freeze
-      NIL_USER_ID_ERROR = 'User ID can not be nil.'.freeze
-      NIL_TOKEN_STORE_ERROR = 'Can not call method if token store is nil'.freeze
+        "Token client ID of %s does not match configured client id %s".freeze
+      NIL_CLIENT_ID_ERROR = "Client id can not be nil.".freeze
+      NIL_SCOPE_ERROR = "Scope can not be nil.".freeze
+      NIL_USER_ID_ERROR = "User ID can not be nil.".freeze
+      NIL_TOKEN_STORE_ERROR = "Can not call method if token store is nil".freeze
       MISSING_ABSOLUTE_URL_ERROR =
         'Absolute base url required for relative callback url "%s"'.freeze
 
@@ -73,14 +72,14 @@ module Google
       # @param [String] callback_uri
       #  URL (either absolute or relative) of the auth callback.
       #  Defaults to '/oauth2callback'
-      def initialize(client_id, scope, token_store, callback_uri = nil)
+      def initialize client_id, scope, token_store, callback_uri = nil
         raise NIL_CLIENT_ID_ERROR if client_id.nil?
         raise NIL_SCOPE_ERROR if scope.nil?
 
         @client_id = client_id
         @scope = Array(scope)
         @token_store = token_store
-        @callback_uri = callback_uri || '/oauth2callback'
+        @callback_uri = callback_uri || "/oauth2callback"
       end
 
       # Build the URL for requesting authorization.
@@ -98,20 +97,20 @@ module Google
       #  nil.
       # @return [String]
       #  Authorization url
-      def get_authorization_url(options = {})
+      def get_authorization_url options = {}
         scope = options[:scope] || @scope
         credentials = UserRefreshCredentials.new(
-          client_id: @client_id.id,
+          client_id:     @client_id.id,
           client_secret: @client_id.secret,
-          scope: scope
+          scope:         scope
         )
-        redirect_uri = redirect_uri_for(options[:base_url])
-        url = credentials.authorization_uri(access_type: 'offline',
-                                            redirect_uri: redirect_uri,
-                                            approval_prompt: 'force',
-                                            state: options[:state],
+        redirect_uri = redirect_uri_for options[:base_url]
+        url = credentials.authorization_uri(access_type:            "offline",
+                                            redirect_uri:           redirect_uri,
+                                            approval_prompt:        "force",
+                                            state:                  options[:state],
                                             include_granted_scopes: true,
-                                            login_hint: options[:login_hint])
+                                            login_hint:             options[:login_hint])
         url.to_s
       end
 
@@ -124,31 +123,26 @@ module Google
       #  the requested scopes
       # @return [Google::Auth::UserRefreshCredentials]
       #  Stored credentials, nil if none present
-      def get_credentials(user_id, scope = nil)
-        raise NIL_USER_ID_ERROR if user_id.nil?
-        raise NIL_TOKEN_STORE_ERROR if @token_store.nil?
-
-        scope ||= @scope
-        saved_token = @token_store.load(user_id)
+      def get_credentials user_id, scope = nil
+        saved_token = stored_token user_id
         return nil if saved_token.nil?
-        data = MultiJson.load(saved_token)
+        data = MultiJson.load saved_token
 
-        if data.fetch('client_id', @client_id.id) != @client_id.id
-          raise sprintf(MISMATCHED_CLIENT_ID_ERROR,
-                        data['client_id'], @client_id.id)
+        if data.fetch("client_id", @client_id.id) != @client_id.id
+          raise format(MISMATCHED_CLIENT_ID_ERROR,
+                       data["client_id"], @client_id.id)
         end
 
         credentials = UserRefreshCredentials.new(
-          client_id: @client_id.id,
+          client_id:     @client_id.id,
           client_secret: @client_id.secret,
-          scope: data['scope'] || @scope,
-          access_token: data['access_token'],
-          refresh_token: data['refresh_token'],
-          expires_at: data.fetch('expiration_time_millis', 0) / 1000
+          scope:         data["scope"] || @scope,
+          access_token:  data["access_token"],
+          refresh_token: data["refresh_token"],
+          expires_at:    data.fetch("expiration_time_millis", 0) / 1000
         )
-        if credentials.includes_scope?(scope)
-          return monitor_credentials(user_id, credentials)
-        end
+        scope ||= @scope
+        return monitor_credentials user_id, credentials if credentials.includes_scope? scope
         nil
       end
 
@@ -167,20 +161,20 @@ module Google
       #  callback uri is a relative.
       # @return [Google::Auth::UserRefreshCredentials]
       #  Credentials if exchange is successful
-      def get_credentials_from_code(options = {})
+      def get_credentials_from_code options = {}
         user_id = options[:user_id]
         code = options[:code]
         scope = options[:scope] || @scope
         base_url = options[:base_url]
         credentials = UserRefreshCredentials.new(
-          client_id: @client_id.id,
+          client_id:     @client_id.id,
           client_secret: @client_id.secret,
-          redirect_uri: redirect_uri_for(base_url),
-          scope: scope
+          redirect_uri:  redirect_uri_for(base_url),
+          scope:         scope
         )
         credentials.code = code
         credentials.fetch_access_token!({})
-        monitor_credentials(user_id, credentials)
+        monitor_credentials user_id, credentials
       end
 
       # Exchanges an authorization code returned in the oauth callback.
@@ -200,10 +194,9 @@ module Google
       #  callback uri is a relative.
       # @return [Google::Auth::UserRefreshCredentials]
       #  Credentials if exchange is successful
-      def get_and_store_credentials_from_code(options = {})
-        credentials = get_credentials_from_code(options)
-        monitor_credentials(options[:user_id], credentials)
-        store_credentials(options[:user_id], credentials)
+      def get_and_store_credentials_from_code options = {}
+        credentials = get_credentials_from_code options
+        store_credentials options[:user_id], credentials
       end
 
       # Revokes a user's credentials. This both revokes the actual
@@ -211,11 +204,11 @@ module Google
       #
       # @param [String] user_id
       #  Unique ID of the user for loading/storing credentials.
-      def revoke_authorization(user_id)
-        credentials = get_credentials(user_id)
+      def revoke_authorization user_id
+        credentials = get_credentials user_id
         if credentials
           begin
-            @token_store.delete(user_id)
+            @token_store.delete user_id
           ensure
             credentials.revoke!
           end
@@ -231,19 +224,31 @@ module Google
       #  Unique ID of the user for loading/storing credentials.
       # @param [Google::Auth::UserRefreshCredentials] credentials
       #  Credentials to store.
-      def store_credentials(user_id, credentials)
+      def store_credentials user_id, credentials
         json = MultiJson.dump(
-          client_id: credentials.client_id,
-          access_token: credentials.access_token,
-          refresh_token: credentials.refresh_token,
-          scope: credentials.scope,
+          client_id:              credentials.client_id,
+          access_token:           credentials.access_token,
+          refresh_token:          credentials.refresh_token,
+          scope:                  credentials.scope,
           expiration_time_millis: credentials.expires_at.to_i * 1000
         )
-        @token_store.store(user_id, json)
+        @token_store.store user_id, json
         credentials
       end
 
       private
+
+      # @private Fetch stored token with given user_id
+      #
+      # @param [String] user_id
+      #  Unique ID of the user for loading/storing credentials.
+      # @return [String] The saved token from @token_store
+      def stored_token user_id
+        raise NIL_USER_ID_ERROR if user_id.nil?
+        raise NIL_TOKEN_STORE_ERROR if @token_store.nil?
+
+        @token_store.load user_id
+      end
 
       # Begin watching a credential for refreshes so the access token can be
       # saved.
@@ -252,9 +257,9 @@ module Google
       #  Unique ID of the user for loading/storing credentials.
       # @param [Google::Auth::UserRefreshCredentials] credentials
       #  Credentials to store.
-      def monitor_credentials(user_id, credentials)
+      def monitor_credentials user_id, credentials
         credentials.on_refresh do |cred|
-          store_credentials(user_id, cred)
+          store_credentials user_id, cred
         end
         credentials
       end
@@ -265,15 +270,16 @@ module Google
       #  Absolute URL to resolve the callback against if necessary.
       # @return [String]
       #  Redirect URI
-      def redirect_uri_for(base_url)
-        return @callback_uri unless URI(@callback_uri).scheme.nil?
-        raise sprintf(
-          MISSING_ABSOLUTE_URL_ERROR,
-          @callback_uri
-        ) if base_url.nil? || URI(base_url).scheme.nil?
+      def redirect_uri_for base_url
+        return @callback_uri if uri_is_postmessage?(@callback_uri) || !URI(@callback_uri).scheme.nil?
+        raise format(MISSING_ABSOLUTE_URL_ERROR, @callback_uri) if base_url.nil? || URI(base_url).scheme.nil?
         URI.join(base_url, @callback_uri).to_s
+      end
+
+      # Check if URI is Google's postmessage flow (not a valid redirect_uri by spec, but allowed)
+      def uri_is_postmessage? uri
+        uri.to_s.casecmp("postmessage").zero?
       end
     end
   end
 end
-# rubocop:enable ClassLength

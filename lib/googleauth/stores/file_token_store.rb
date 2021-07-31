@@ -27,8 +27,8 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-require 'yaml/store'
-require 'googleauth/token_store'
+require "yaml/store"
+require "googleauth/token_store"
 
 module Google
   module Auth
@@ -39,24 +39,25 @@ module Google
         #
         # @param [String, File] file
         #  Path to storage file
-        def initialize(options = {})
+        def initialize options = {}
+          super()
           path = options[:file]
-          @store = YAML::Store.new(path)
+          @store = YAML::Store.new path
         end
 
         # (see Google::Auth::Stores::TokenStore#load)
-        def load(id)
+        def load id
           @store.transaction { @store[id] }
         end
 
         # (see Google::Auth::Stores::TokenStore#store)
-        def store(id, token)
+        def store id, token
           @store.transaction { @store[id] = token }
         end
 
         # (see Google::Auth::Stores::TokenStore#delete)
-        def delete(id)
-          @store.transaction { @store.delete(id) }
+        def delete id
+          @store.transaction { @store.delete id }
         end
       end
     end
