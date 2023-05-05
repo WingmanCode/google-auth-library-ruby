@@ -21,5 +21,5 @@ group :development do
   gem "webmock", "~> 3.8"
 end
 
-gem "faraday", ">= 0.17.3", "<= 2.0"
+gem "faraday", ">= 0.17.3", "< 2.0"
 gem "gems", "~> 1.2"
